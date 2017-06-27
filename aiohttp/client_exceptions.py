@@ -13,7 +13,9 @@ __all__ = (
     'ServerFingerprintMismatch',
 
     'ClientResponseError', 'ClientRedirectError', 'ClientPayloadError',
-    'ClientHttpProxyError', 'WSServerHandshakeError')
+    'ClientHttpProxyError', 'WSServerHandshakeError',
+
+    'UpgradeSSLError')
 
 
 class ClientError(Exception):
@@ -118,3 +120,10 @@ class ServerFingerprintMismatch(ServerConnectionError):
 
 class ClientPayloadError(ClientError):
     """Response payload error."""
+
+
+class ClientUpgradeSSLError(Exception):
+    """Upgrade to SSL failed."""
+
+    def __init__(self, reason):
+        self.reason = reason

@@ -31,6 +31,8 @@ class ResponseHandler(DataQueue, asyncio.streams.FlowControlMixin):
         self._upgraded = False
         self._parser = None
 
+        self._ssl_upgrade = False
+
     @property
     def upgraded(self):
         return self._upgraded
@@ -58,10 +60,16 @@ class ResponseHandler(DataQueue, asyncio.streams.FlowControlMixin):
         return self.transport is not None
 
     def connection_made(self, transport):
+        if self._ssl_upgrade:
+            # upgraded ssl transport received
+            self._ssl_upgrade = False
         self.transport = transport
         self.writer = StreamWriter(self, transport, self._loop)
 
     def connection_lost(self, exc):
+        if self._ssl_upgrade:
+            self._transport = None
+
         if self._payload_parser is not None:
             try:
                 self._payload_parser.feed_eof()
@@ -145,6 +153,12 @@ class ResponseHandler(DataQueue, asyncio.streams.FlowControlMixin):
         if not data:
             return
 
+        if self._ssl_upgrade:
+            # data receiving is forbidden during upgrade to ssl
+            self._transport.abort(RuntimeError(
+                "data received in upgrade to SSL stage"))
+            return
+
         # custom payload parser
         if self._payload_parser is not None:
             eof, tail = self._payload_parser.feed_data(data)
@@ -189,3 +203,6 @@ class ResponseHandler(DataQueue, asyncio.streams.FlowControlMixin):
                         self.data_received(tail)
                     else:
                         self._tail = tail
+
+    def upgrade_ssl(self):
+        self._ssl_upgrade = True

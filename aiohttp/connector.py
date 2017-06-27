@@ -13,7 +13,8 @@ from types import MappingProxyType
 from . import hdrs, helpers
 from .client_exceptions import (ClientConnectorError, ClientHttpProxyError,
                                 ClientProxyConnectionError,
-                                ServerFingerprintMismatch)
+                                ServerFingerprintMismatch,
+                                ClientUpgradeSSLError)
 from .client_proto import ResponseHandler
 from .client_reqrep import ClientRequest
 from .helpers import SimpleCookie, is_ip_address, noop, sentinel
@@ -82,6 +83,26 @@ class Connection:
     def add_callback(self, callback):
         if callback is not None:
             self._callbacks.append(callback)
+
+    @asyncio.coroutine
+    def startssl(self, ssl_context, server_hostname):
+        transport = self._protocol.transport
+        self._protocol.upgrade_ssl()
+        try:
+            rawsock = transport.get_extra_info('socket', default=None)
+            if rawsock is None:
+                raise RuntimeError(
+                    "Transport does not expose socket instance")
+            # Duplicate the socket, so now we can close proxy transport
+            rawsock = rawsock.dup()
+        finally:
+            transport.close()
+        try:
+            yield from self._loop.create_connection(
+                lambda: self._protocol, ssl=self.ssl_context, sock=rawsock,
+                server_hostname=server_hostname)
+        except Exception as exc:
+            raise ClientUpgradeSSLError(exc)
 
     def _notify_release(self):
         callbacks, self._callbacks = self._callbacks[:], []

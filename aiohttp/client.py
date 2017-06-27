@@ -230,6 +230,9 @@ class ClientSession:
                     try:
                         with CeilTimeout(self._conn_timeout, loop=self._loop):
                             conn = yield from self._connector.connect(req)
+                            if req.ssl:
+                                yield from conn.startssl(
+                                    self._connector.ssl_context)
                     except asyncio.TimeoutError as exc:
                         raise ServerTimeoutError(
                             'Connection timeout '
